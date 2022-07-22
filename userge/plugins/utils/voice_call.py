@@ -112,13 +112,14 @@ def check_cq_for_all(func):
 def default_markup():
     """ default markup for playing text """
 
-    buttons = InlineKeyboardMarkup(
-        [[
-            InlineKeyboardButton(text="⏩ Skip", callback_data="skip"),
-            InlineKeyboardButton(text="🗒 Queue", callback_data="queue")
-        ]]
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(text="⏩ Skip", callback_data="skip"),
+                InlineKeyboardButton(text="🗒 Queue", callback_data="queue"),
+            ]
+        ]
     )
-    return buttons
 
 
 def volume_button_markup():
@@ -233,19 +234,17 @@ async def toggle_vc(msg: Message):
     global CMDS_FOR_ALL  # pylint: disable=global-statement
 
     await msg.delete()
-    if CMDS_FOR_ALL:
-        CMDS_FOR_ALL = False
-    else:
-        CMDS_FOR_ALL = True
-
+    CMDS_FOR_ALL = not CMDS_FOR_ALL
     await VC_DB.update_one(
         {'_id': 'VC_CMD_TOGGLE'},
         {"$set": {'is_enable': CMDS_FOR_ALL}},
         upsert=True
     )
 
-    text = "**Enabled**" if CMDS_FOR_ALL else "**Disabled**"
-    text += " commands Successfully"
+    text = (
+        "**Enabled**" if CMDS_FOR_ALL else "**Disabled**"
+    ) + " commands Successfully"
+
     await reply_text(msg, text, del_in=5)
 
 
@@ -314,16 +313,15 @@ async def _help(msg: Message):
                         f"    📚 <b>info:</b>  <i>{cmd.doc}</i>\n\n")
         await reply_text(msg, out_str, parse_mode="html")
 
-    else:
-        if msg.input_str.lstrip(Config.SUDO_TRIGGER) in raw_cmds:
-            key = msg.input_str.lstrip(Config.CMD_TRIGGER)
-            key_ = Config.CMD_TRIGGER + key
-            if key in commands:
-                out_str = f"<code>{key}</code>\n\n{commands[key].about}"
-                await reply_text(msg, out_str, parse_mode="html")
-            elif key_ in commands:
-                out_str = f"<code>{key_}</code>\n\n{commands[key_].about}"
-                await reply_text(msg, out_str, parse_mode="html")
+    elif msg.input_str.lstrip(Config.SUDO_TRIGGER) in raw_cmds:
+        key = msg.input_str.lstrip(Config.CMD_TRIGGER)
+        key_ = Config.CMD_TRIGGER + key
+        if key in commands:
+            out_str = f"<code>{key}</code>\n\n{commands[key].about}"
+            await reply_text(msg, out_str, parse_mode="html")
+        elif key_ in commands:
+            out_str = f"<code>{key_}</code>\n\n{commands[key_].about}"
+            await reply_text(msg, out_str, parse_mode="html")
 
 
 @userge.on_cmd("forceplay", about={
@@ -506,9 +504,9 @@ async def nsc_handler(c: GroupCall, connected: bool):
         os.remove("output.raw")
 
     await userge.send_message(
-        int("-100" + str(c.full_chat.id)) if connected else CHAT_ID,
+        int(f"-100{str(c.full_chat.id)}") if connected else CHAT_ID,
         f"`{'Joined' if connected else 'Left'} Voice-Chat Successfully`",
-        del_in=5 if not connected else -1
+        del_in=-1 if connected else 5,
     )
 
 
@@ -580,7 +578,7 @@ async def yt_down(msg: Message):
 
     audio_path = None
     for i in ["*.mp3", "*.flac", "*.wav", "*.m4a"]:
-        aup = glob.glob("temp_music_dir/" + i)
+        aup = glob.glob(f"temp_music_dir/{i}")
         if aup and aup[0] and os.path.exists(aup[0]):
             audio_path = aup[0]
             break
@@ -597,9 +595,7 @@ async def yt_down(msg: Message):
             return None
         replied = msg.reply_to_message
         if replied and msg.client.id == msg.from_user.id:
-            if not replied.from_user:
-                return None
-            return replied.from_user.mention
+            return replied.from_user.mention if replied.from_user else None
         return msg.from_user.mention
 
     BACK_BUTTON_TEXT = (

@@ -85,16 +85,13 @@ async def bot_pm(msg: Message):
     global BOT_PM  # pylint: disable=global-statement
     if not userge.has_bot:
         return await msg.err("You have to us Bot mode or Dual mode if you want to enable Bot Pm.")
-    if BOT_PM:
-        BOT_PM = False
-    else:
-        BOT_PM = True
+    BOT_PM = not BOT_PM
     await SAVED_SETTINGS.update_one(
         {"_id": "BOT_PM"}, {"$set": {"data": BOT_PM}}, upsert=True
     )
     await msg.edit(
-        f"Bot Pm `{'Disabled ❌' if not BOT_PM else 'Enabled ✅'}` Successully.",
-        del_in=5
+        f"Bot Pm `{'Enabled ✅' if BOT_PM else 'Disabled ❌'}` Successully.",
+        del_in=5,
     )
 
 
@@ -161,8 +158,7 @@ if userge.has_bot:
     async def set_text(_, msg: PyroMessage):
         global START_TEXT  # pylint: disable=global-statement
         text = msg.text.split(' ', maxsplit=1)[1] if ' ' in msg.text else ''
-        replied = msg.reply_to_message
-        if replied:
+        if replied := msg.reply_to_message:
             text = replied.text or replied.caption
         if not text:
             await msg.reply("Text not found!")
@@ -178,7 +174,7 @@ if userge.has_bot:
         global _BANNED_USERS  # pylint: disable=global-statement
         replied = msg.reply_to_message
         user_id = msg.text.split(' ', maxsplit=1)[1] if ' ' in msg.text else ''
-        if not (replied or user_id):
+        if not replied and not user_id:
             await msg.reply("reply to user message or give id to Ban.")
         elif replied and replied.from_user.id == userge_id:
             await msg.reply("You are trying to Ban yourself!")
@@ -186,10 +182,10 @@ if userge.has_bot:
             if replied:
                 if replied.forward_from:
                     user_id = replied.forward_from.id
-                else:
-                    if replied.message_id not in _U_ID_F_M_ID:
-                        return await msg.reply("You can't reply old message of this user.")
+                elif replied.message_id in _U_ID_F_M_ID:
                     user_id = _U_ID_F_M_ID.get(replied.message_id)
+                else:
+                    return await msg.reply("You can't reply old message of this user.")
             else:
                 # noinspection PyBroadException
                 try:
@@ -217,7 +213,7 @@ if userge.has_bot:
         global _BANNED_USERS  # pylint: disable=global-statement
         replied = msg.reply_to_message
         user_id = msg.text.split(' ', maxsplit=1)[1] if ' ' in msg.text else ''
-        if not (replied or user_id):
+        if not replied and not user_id:
             await msg.reply("reply to user message or give id to UnBan.")
         elif replied and replied.from_user.id == userge_id:
             await msg.reply("You are trying to UnBan yourself!")
@@ -225,10 +221,10 @@ if userge.has_bot:
             if replied:
                 if replied.forward_from:
                     user_id = replied.forward_from.id
-                else:
-                    if replied.message_id not in _U_ID_F_M_ID:
-                        return await msg.reply("You can't reply old message of this user.")
+                elif replied.message_id in _U_ID_F_M_ID:
                     user_id = _U_ID_F_M_ID.get(replied.message_id)
+                else:
+                    return await msg.reply("You can't reply old message of this user.")
             else:
                 # noinspection PyBroadException
                 try:
@@ -303,7 +299,7 @@ After Adding a var, you can see your media when you start your Bot.
             ]
         )
         if cq.data == "stngs":
-            text = f"Bot Pm - {'Disabled ❌' if not BOT_PM else 'Enabled ✅'}"
+            text = f"Bot Pm - {'Enabled ✅' if BOT_PM else 'Disabled ❌'}"
             btn = [InlineKeyboardButton(text, callback_data="en_dis_bot_pm")]
             mp = settings_markup
             mp.inline_keyboard.insert(0, btn)
@@ -313,14 +309,11 @@ After Adding a var, you can see your media when you start your Bot.
                 reply_markup=mp
             )
         elif cq.data == "en_dis_bot_pm":
-            if BOT_PM:
-                BOT_PM = False
-            else:
-                BOT_PM = True
+            BOT_PM = not BOT_PM
             await SAVED_SETTINGS.update_one(
                 {"_id": "BOT_PM"}, {"$set": {"data": BOT_PM}}, upsert=True
             )
-            text = f"Bot Pm - {'Disabled ❌' if not BOT_PM else 'Enabled ✅'}"
+            text = f"Bot Pm - {'Enabled ✅' if BOT_PM else 'Disabled ❌'}"
             btn = [InlineKeyboardButton(text, callback_data=cq.data)]
             mp = settings_markup
             mp.inline_keyboard.insert(0, btn)
@@ -459,12 +452,9 @@ After Adding a var, you can see your media when you start your Bot.
                 await bot.send_message(userge_id, f"{msg.from_user.mention} sent you a sticker.")
             m = await msg.forward(userge_id)
             if m.forward_from or m.forward_sender_name or m.forward_date:
-                id_ = 0
-                for a, b in _U_ID_F_M_ID.items():
-                    if b == user_id:
-                        id_ = a
-                        break
-                if id_:
+                if id_ := next(
+                    (a for a, b in _U_ID_F_M_ID.items() if b == user_id), 0
+                ):
                     del _U_ID_F_M_ID[id_]
                     await U_ID_F_M_ID.delete_one({"user_id": user_id})
 
@@ -491,10 +481,10 @@ After Adding a var, you can see your media when you start your Bot.
         else:
             if replied.forward_from:
                 reply_id = replied.forward_from.id
-            else:
-                if replied.message_id not in _U_ID_F_M_ID:
-                    return await msg.reply("You can't reply old message of this user.")
+            elif replied.message_id in _U_ID_F_M_ID:
                 reply_id = _U_ID_F_M_ID.get(replied.message_id)
+            else:
+                return await msg.reply("You can't reply old message of this user.")
             try:
                 if msg.text:
                     await bot.send_message(reply_id, msg.text, disable_web_page_preview=True)
@@ -540,7 +530,7 @@ Type /send to confirm or /cancel to exit.
         IN_CONVO = True
         temp_msgs = []
         async with userge.bot.conversation(
-                msg.chat.id, timeout=30, limit=7) as conv:  # 5 post msgs and 2 command msgs
+                    msg.chat.id, timeout=30, limit=7) as conv:  # 5 post msgs and 2 command msgs
             await conv.send_message(MESSAGE)
             filter_ = filters.create(lambda _, __, ___: filters.incoming & ~filters.edited)
             while True:
@@ -548,9 +538,9 @@ Type /send to confirm or /cancel to exit.
                 if response.text.startswith("/cancel"):
                     IN_CONVO = False
                     return await msg.reply("Broadcast process Cancelled.")
-                if len(temp_msgs) >= 1 and response.text == "/done":
+                if temp_msgs and response.text == "/done":
                     break
-                if len(temp_msgs) >= 1 and response.text == "/preview":
+                if temp_msgs and response.text == "/preview":
                     conv._count -= 1
                     for i in temp_msgs:
                         if i.poll:

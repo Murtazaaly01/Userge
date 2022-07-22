@@ -29,9 +29,7 @@ class PasteService:
 
     def is_supported(self, url: str) -> bool:
         """ returns True if url supports service """
-        if url.startswith((self._url, self._url.replace("https://", ""))):
-            return True
-        return False
+        return bool(url.startswith((self._url, self._url.replace("https://", ""))))
 
     # pylint: disable=W0613
     async def paste(self, ses: aiohttp.ClientSession,
@@ -41,15 +39,11 @@ class PasteService:
 
     async def get_paste(self, ses: aiohttp.ClientSession, code: str) -> Optional[str]:
         """ returns pasted text using this code or None if failed """
-        async with ses.get(self._url + "raw/" + code) as resp:
+        async with ses.get(f"{self._url}raw/{code}") as resp:
             if resp.status == 404:
                 async with ses.get(self._url + code + "/raw") as _resp:
-                    if _resp.status != 200:
-                        return None
-                    return await _resp.text()
-            if resp.status != 200:
-                return None
-            return await resp.text()
+                    return None if _resp.status != 200 else await _resp.text()
+            return None if resp.status != 200 else await resp.text()
 
 
 class NekoBin(PasteService):
@@ -58,18 +52,18 @@ class NekoBin(PasteService):
 
     async def paste(self, ses: aiohttp.ClientSession,
                     text: str, file_type: Optional[str]) -> Optional[str]:
-        async with ses.post(self._url + "api/documents", json={"content": text}) as resp:
+        async with ses.post(f"{self._url}api/documents", json={"content": text}) as resp:
             if resp.status != 201:
                 return None
             response = await resp.json()
             key = response['result']['key']
             final_url = self._url + key
             if file_type:
-                final_url += "." + file_type
+                final_url += f".{file_type}"
             return final_url
 
     async def get_paste(self, ses: aiohttp.ClientSession, code: str) -> Optional[str]:
-        async with ses.get(self._url + "api/documents/" + code) as resp:
+        async with ses.get(f"{self._url}api/documents/{code}") as resp:
             if resp.status != 200:
                 return None
             response = await resp.json()
@@ -82,14 +76,14 @@ class HasteBin(PasteService):
 
     async def paste(self, ses: aiohttp.ClientSession,
                     text: str, file_type: Optional[str]) -> Optional[str]:
-        async with ses.post(self._url + "documents", data=text) as resp:
+        async with ses.post(f"{self._url}documents", data=text) as resp:
             if resp.status != 200:
                 return None
             response = await resp.json()
             key = response['key']
             final_url = self._url + key
             if file_type:
-                final_url += "." + file_type
+                final_url += f".{file_type}"
             return final_url
 
 
@@ -110,14 +104,12 @@ class Rentry(PasteService):
             if not token:
                 return None
         if file_type:
-            text = f"```{file_type}\n" + text + "\n```"
+            text = f"```{file_type}\n{text}" + "\n```"
         async with ses.post(self._url,
-                            data=dict(csrfmiddlewaretoken=token, text=text),
-                            headers=dict(Referer=self._url),
-                            allow_redirects=True) as resp:
-            if resp.status != 200:
-                return None
-            return str(resp.url)
+                                data=dict(csrfmiddlewaretoken=token, text=text),
+                                headers=dict(Referer=self._url),
+                                allow_redirects=True) as resp:
+            return None if resp.status != 200 else str(resp.url)
 
 
 class Pasting(PasteService):
@@ -129,7 +121,7 @@ class Pasting(PasteService):
         data = {"content": text}
         if file_type:
             data['code'] = "true"
-        async with ses.post(self._url + "api", json=data) as resp:
+        async with ses.post(f"{self._url}api", json=data) as resp:
             if resp.status != 200:
                 return None
             code = await resp.text()
@@ -142,7 +134,7 @@ class PastyLus(PasteService):
 
     async def paste(self, ses: aiohttp.ClientSession,
                     text: str, file_type: Optional[str]) -> Optional[str]:
-        async with ses.post(self._url + "api/v2/pastes/", json={"content": text}) as resp:
+        async with ses.post(f"{self._url}api/v2/pastes/", json={"content": text}) as resp:
             if resp.status != 201:
                 return None
             content = await resp.text()
@@ -154,7 +146,7 @@ class PastyLus(PasteService):
                 return None
             final_url = self._url + code
             if file_type:
-                final_url += '.' + file_type
+                final_url += f'.{file_type}'
             return final_url
 
 
@@ -172,7 +164,7 @@ class Katbin(PasteService):
             key = response['paste_id']
             final_url = self._url + key
             if file_type:
-                final_url += "." + file_type
+                final_url += f".{file_type}"
             return final_url
 
     async def get_paste(self, ses: aiohttp.ClientSession, code: str) -> Optional[str]:
@@ -187,11 +179,7 @@ _SERVICES: Dict[str, PasteService] = {
     '-n': NekoBin(), '-h': HasteBin(), '-r': Rentry(),
     '-p': Pasting(), '-pl': PastyLus(), '-k': Katbin()}
 
-if Config.HEROKU_ENV:
-    _DEFAULT_SERVICE = '-pl'
-else:
-    _DEFAULT_SERVICE = '-n'
-
+_DEFAULT_SERVICE = '-pl' if Config.HEROKU_ENV else '-n'
 _HEADERS = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) AppleWebKit/537.36 ('
                           'KHTML, like Gecko) Cafari/537.36'}
 
